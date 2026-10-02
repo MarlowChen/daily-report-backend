@@ -1,0 +1,30 @@
+{
+  "name": "daily-report-line-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "app": "node app.mjs",
+    "build:mac-app": "node build-mac-app.mjs",
+    "dry-run": "node relay.mjs",
+    "send": "node relay.mjs --send",
+    "send:auto": "node relay.mjs --send --auto",
+    "send:smart": "node relay.mjs --send --auto --smart-room",
+    "test-clicks": "node relay.mjs --test-clicks",
+    "test-search-focus": "node relay.mjs --test-search-focus",
+    "test-room": "node relay.mjs --test-room",
+    "test-room:open": "node relay.mjs --test-room-open",
+    "test-room:smart": "node relay.mjs --test-room-open --smart-room",
+    "verify-room": "node relay.mjs --verify-room",
+    "test-message": "node relay.mjs --test-message 測試",
+    "test-room:paste": "node relay.mjs --test-room-paste-only",
+    "dump-ui": "node relay.mjs --dump-ui",
+    "dump-ui:all": "node relay.mjs --dump-ui-all",
+    "mouse-position": "node relay.mjs --mouse-position",
+    "mouse-position:delay": "node relay.mjs --mouse-position --mouse-position-delay 5000",
+    "test-paste": "node relay.mjs --test-paste"
+  },
+  "dependencies": {
+    "dotenv": "16.4.7"
+  }
+}

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture Review — climbing</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#f5f5f7; color:#1d1d1f; line-height:1.6; margin:0; display:flex; }
+    nav { width:230px; flex-shrink:0; background:#fff; border-right:1px solid #e5e5ea; padding:24px 16px; position:sticky; top:0; height:100vh; overflow:auto; }
+    nav h2 { font-size:.75rem; color:#8e8e93; letter-spacing:.08em; text-transform:uppercase; }
+    nav a { display:block; color:#3a3a3c; text-decoration:none; padding:5px 8px; font-size:.86rem; }
+    main { max-width:1500px; padding:36px 48px; min-width:0; }
+    header { border-bottom:1px solid #e5e5ea; margin-bottom:32px; padding-bottom:20px; }
+    h1 { margin:0; font-size:1.8rem; } h2 { border-bottom:2px solid #e5e5ea; padding-bottom:8px; margin-top:36px; }
+    .card,.diagram-card { background:#fff; border:1px solid #e5e5ea; border-radius:12px; padding:20px; margin:14px 0; overflow:auto; }
+    .diagram-desc { color:#6e6e73; font-size:.9rem; }
+    .finding { display:flex; gap:12px; padding:14px; margin:10px 0; border-radius:8px; }
+    .strength { background:#f0faf4; border-left:3px solid #30d158; } .concern { background:#fffbf0; border-left:3px solid #ff9f0a; } .risk { background:#fff5f5; border-left:3px solid #ff3b30; }
+    .badge { color:#fff; border-radius:4px; padding:2px 8px; font-size:.75rem; font-weight:600; height:max-content; white-space:nowrap; }
+    .badge-strength { background:#30d158; } .badge-concern { background:#ff9f0a; } .badge-risk { background:#ff3b30; }
+    .finding-text { flex:1; } .finding-text strong { display:block; } .finding-text p { margin:4px 0 0; }
+    li { margin:10px 0; }
+    @media(max-width:700px){body{display:block}nav{width:auto;height:auto;position:relative;border:0;border-bottom:1px solid #e5e5ea}main{padding:24px 18px}}
+  </style>
+</head>
+<body>
+  <nav>
+    <h2>Architecture Review</h2>
+    <a href="#current">目前架構</a>
+    <a href="#separation-of-concerns">責任分離</a>
+    <a href="#cohesion-and-coupling">凝聚與耦合</a>
+    <a href="#layered-architecture">分層架構</a>
+    <a href="#hexagonal-architecture-ports-and-adapters">Ports and Adapters</a>
+    <a href="#scalability">擴展性</a>
+    <a href="#observability">可觀測性</a>
+    <a href="#reliability">可靠性</a>
+    <a href="#resilience">韌性</a>
+    <a href="#data-architecture">資料架構</a>
+    <a href="#operability">可操作性</a>
+    <a href="#deployment-architecture">部署架構</a>
+    <a href="#api-architecture">API 架構</a>
+    <a href="#recommended">建議架構</a>
+  </nav>
+  <main>
+    <header>
+      <h1>climbing 日報產生架構稽核</h1>
+      <p>針對 P1、P2、P3 連鎖失敗、外部來源 403、重跑覆蓋與媒體日期錯置的 codebase review。</p>
+      <p style="color:#8e8e93;font-size:.85rem">Generated 2026-10-01 · Codebase Review · CodeGraph not available — structural analysis based on file/grep heuristics.</p>
+    </header>
+
+    <section id="current">
+      <h2>目前架構</h2>
+      <div class="card"><p>目前是單一 Next.js + Payload 應用。三個 Part 產生器直接呼叫外部來源、上傳 Media，並各自 find/update 同一筆 DailyReport。入口可由 API route 或本地 node 腳本觸發；MongoDB 儲存報告與 Media metadata，本地檔案夾或 S3 儲存圖片。</p></div>
+      <div class="diagram-card"><h3>System Context</h3><p class="diagram-desc">使用者透過日報 API 或 LINE relay 取得報告；應用依賴多個易變的外部來源。</p><div class="mermaid">
+graph TB
+  User["管理者／社群使用者"] --> App["Next.js + Payload 日報應用"]
+  Relay["LINE relay"] --> App
+  App --> DB[("MongoDB")]
+  App --> Media["Payload Media storage"]
+  App --> Crypto["BlockTempo / CoinGecko / CryptoBubbles"]
+  App --> CTEE["工商時報／CTEE"]
+  App --> ED["經濟日報／UDN"]
+  App --> Markets["Finviz / Google Finance / Yahoo Finance"]
+      </div></div>
+      <div class="diagram-card"><h3>Component Diagram</h3><p class="diagram-desc">實際模組關係顯示產生器同時承擔 orchestration、外部 adapter、驗證與 persistence。</p><div class="mermaid">
+graph LR
+  subgraph app["Daily report application"]
+    Routes["API routes"] --> Parts["part1 / part2 / part3 generators"]
+    Parts --> Sources["source fetchers and Playwright captures"]
+    Parts --> Validate["ad hoc assertions"]
+    Parts --> Upload["media upload helper"]
+    Parts --> Payload["Payload Local API"]
+  end
+  Payload --> Reports[("dailyReports")]
+  Payload --> Media[("media")]
+  Sources --> External["External publishers and market services"]
+      </div></div>
+      <div class="diagram-card"><h3>Data / Information Architecture</h3><p class="diagram-desc">一筆 DailyReport 擁有三個巢狀 Part；Media 以 relation ID 連結，但來源日期沒有成為可驗證的 domain key。</p><div class="mermaid">
+graph TD
+  Report["DailyReport(reportDate, status, errorLogs)"] --> P1["part1: news + 2 images"]
+  Report --> P2["part2: CTEE 3 + Economic 3 images"]
+  Report --> P3["part3: digest items + 4 images"]
+  P1 --> M1["Media relations"]
+  P2 --> M2["Media relations"]
+  P3 --> M3["Media relations"]
+  Report --> Errors["shared errorLogs"]
+      </div></div>
+      <div class="diagram-card"><h3>Integration Diagram</h3><p class="diagram-desc">外部來源沒有統一的 adapter contract 或 circuit breaker；經濟日報 403 直接進入 Part 2 error。</p><div class="mermaid">
+graph LR
+  Orchestrator["Report run"] --> News["BlockTempo RSS"]
+  Orchestrator --> C1["CTEE newspaper browser"]
+  Orchestrator --> E1["UDN public image endpoint"]
+  E1 -. "403" .-> E2["SSO authenticated fallback"]
+  Orchestrator --> C2["CTEE digest RSS / Google News"]
+  Orchestrator --> F["Finviz / Google Finance"]
+  Orchestrator --> Y["Yahoo Finance"]
+      </div></div>
+      <div class="diagram-card"><h3>Sequence Diagram</h3><p class="diagram-desc">現行串行流程讓單一來源失敗污染全域狀態。</p><div class="mermaid">
+sequenceDiagram
+  participant Job as Runner
+  participant P1 as Part1
+  participant P2 as Part2
+  participant P3 as Part3
+  participant DB as Payload DB
+  Job->>P1: generate
+  P1->>DB: update report status
+  Job->>P2: generate
+  P2->>P2: fetch Economic A01-A03
+  P2-->>P2: 403 / fallback miss
+  P2->>DB: update report with failed status
+  Job->>P3: generate
+  P3->>DB: update same report
+  Note over DB: status is global; package gates on any error scope
+      </div></div>
+    </section>
+
+    <section id="separation-of-concerns"><h2>責任分離</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>Generator 是 orchestration、資料存取與來源邏輯的混合體</strong><p>part1/2/3 直接呼叫 Payload、外部 fetch、Playwright 與 media upload；因此來源變更會同時影響 domain 狀態與 persistence。</p></div></div></section>
+    <section id="cohesion-and-coupling"><h2>凝聚與耦合</h2><div class="finding risk"><span class="badge badge-risk">Risk</span><div class="finding-text"><strong>三個 writer 共用一筆可變的 aggregate</strong><p>每個 Part 都讀取舊資料後整筆 update；重跑時可能把其他 Part 的 relation 寫成 null。這是連鎖失敗與日期錯置的主要放大器。</p></div></div></section>
+    <section id="layered-architecture"><h2>分層架構</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>沒有明確 application/domain/infrastructure 邊界</strong><p>source fetchers、圖片驗證、Payload upload、status policy 分散在同一層，難以替換 UDN adapter 或模擬依賴。</p></div></div></section>
+    <section id="hexagonal-architecture-ports-and-adapters"><h2>Ports and Adapters</h2><div class="finding risk"><span class="badge badge-risk">Risk</span><div class="finding-text"><strong>外部來源沒有統一契約與可替換 fallback</strong><p>經濟日報的 public endpoint 和 SSO fallback 是特例邏輯；沒有把 403、登入超時、日期不可用表達成可分類的 adapter result。</p></div></div></section>
+    <section id="scalability"><h2>擴展性</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>長時間 Playwright 與外部下載在同步 runner 內串行</strong><p>單次作業容易超時，也沒有 queue、lease、backpressure 或 per-source concurrency 控制。</p></div></div></section>
+    <section id="observability"><h2>可觀測性</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>有 errorLogs，但缺少 attempt、provider、HTTP status、duration 與 artifact identity</strong><p>目前可知道 403，卻難以回答哪個 URL、哪次重試、哪個檔案已寫入；不利於判斷可安全重跑的範圍。</p></div></div></section>
+    <section id="reliability"><h2>可靠性</h2><div class="finding risk"><span class="badge badge-risk">Risk</span><div class="finding-text"><strong>單一來源失敗使整份報告 failed</strong><p>DailyReports.status 只有一個全域狀態，share package 又把所有 media 當作 ready gate；P2 403 因此污染 P1/P3 的可用性。</p></div></div></section>
+    <section id="resilience"><h2>韌性</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>重試不是按來源分類，且沒有 circuit breaker 或 stale policy</strong><p>對持續 403 的來源重試不會提高成功率，反而延長整批作業；應該快速失敗、標記 degraded，保留可用 Part。</p></div></div></section>
+    <section id="data-architecture"><h2>資料架構</h2><div class="finding risk"><span class="badge badge-risk">Risk</span><div class="finding-text"><strong>Media metadata 沒有 domain-level date/source/page identity</strong><p>上傳 filename 和 alt 是字串，沒有唯一鍵或 validator 確保 reportDate、pageCode、來源與內容一致；曾出現 alt 9/21、filename 9/22。</p></div></div></section>
+    <section id="operability"><h2>可操作性</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>沒有單一 run manifest 與可重跑命令</strong><p>人工需要知道先跑哪個 Part、哪些檔案可保留、哪些錯誤可忽略；缺少 idempotent run ID 與 repair mode。</p></div></div></section>
+    <section id="deployment-architecture"><h2>部署架構</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>本地 media 與正式站 storage 行為不一致</strong><p>本地檔案可讀不代表正式站 API 可讀；部署驗證應在 package level 檢查所有 artifact HTTP 可下載。</p></div></div></section>
+    <section id="api-architecture"><h2>API 架構</h2><div class="finding concern"><span class="badge badge-concern">Concern</span><div class="finding-text"><strong>API 回傳以整體 status 表達部分成功</strong><p>呼叫者無法只重跑失敗的 source；應回傳 per-part/per-artifact status、可重跑 scopes 與 readiness。</p></div></div></section>
+
+    <section id="recommended"><h2>建議架構</h2>
+      <div class="diagram-card"><h3>Recommended Component Diagram</h3><div class="mermaid">
+graph LR
+  Trigger["Manual / scheduled trigger"] --> Run["ReportRun orchestrator"]
+  Run --> Jobs["Independent Part jobs"]
+  Jobs --> Ports["Source adapter ports"]
+  Ports --> Adapters["BlockTempo / CTEE / UDN / Market adapters"]
+  Jobs --> Validator["Artifact + date + content validator"]
+  Validator --> Repo["Report repository"]
+  Validator --> MediaRepo["Media repository"]
+  Repo --> DB[("MongoDB")]
+  MediaRepo --> Store["S3 or local media"]
+  Run --> Manifest["Run manifest + per-artifact state"]
+      </div></div>
+      <div class="diagram-card"><h3>Recommended Sequence</h3><div class="mermaid">
+sequenceDiagram
+  participant R as ReportRun
+  participant J as Part job
+  participant A as Source adapter
+  participant V as Validator
+  participant S as Storage
+  R->>J: start independent part with runId
+  J->>A: fetch with timeout and bounded retry
+  A-->>J: success or classified failure
+  J->>V: validate sourceDate, pageCode, hash, dimensions
+  V-->>J: artifact accepted or rejected
+  J->>S: idempotent upsert artifact
+  J-->>R: per-artifact result
+  R->>R: aggregate partial / ready / degraded
+      </div></div>
+      <div class="card"><ol>
+        <li><strong>先拆狀態模型。</strong>保留 DailyReport.status 作為聚合狀態，新增每個 Part 與每個 artifact 的 state（pending、generated、degraded、failed），禁止 Part writer 用 null 覆蓋其他 Part。</li>
+        <li><strong>建立 run manifest。</strong>以 reportDate + runId + partId + artifactKey 做唯一鍵；重跑只 upsert 指定 artifact，並保留 attempt、provider、URL、HTTP status、hash、尺寸與時間。</li>
+        <li><strong>把來源抽成 adapters。</strong>每個 adapter 回傳統一的 Result，不讓 403、SSO timeout、日期不存在直接穿透到 report writer；403 應快速失敗並進入 degraded policy。</li>
+        <li><strong>加強 media invariant。</strong>filename、alt、sourceDate、pageCode 必須由同一個 artifact key 產生；上傳前驗證圖片尺寸、hash 非重複、可解析日期，Payload relation 只接受已驗證 artifact。</li>
+        <li><strong>改成獨立 job 與可安全重跑。</strong>P1/P2/P3 可平行或分批執行；P2 失敗不阻止 P1/P3 產生，package API 只在必要 artifact 全部 ready 時回報 ready。</li>
+        <li><strong>加入來源健康策略。</strong>連續 403 開 circuit，暫停無效重試；可選 stale-but-labelled fallback，但不得把別日圖片偽裝成今天。</li>
+        <li><strong>驗證門檻分兩層。</strong>單元／整合測試驗證 adapter 與 state merge；部署後 verifier 驗證 package readiness、每個 media URL HTTP 200、日期與 artifact key 一致。</li>
+      </ol></div>
+      <div class="card"><h3>Migration notes</h3><p>第一階段先新增 immutable artifact key、per-part state 與 merge writer，並保留現有 API。第二階段把 Economic Daily、CTEE、market sources 改成 adapters，加入 403 circuit 與 contract tests。第三階段再把 runner 移到 queue/worker，最後把正式站部署 verifier 接到發布流程。這個順序可先消除資料覆蓋與錯誤污染，再處理外部來源本身的不穩定。</p></div>
+    </section>
+  </main>
+</body>
+</html>

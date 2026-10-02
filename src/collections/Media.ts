@@ -1,4 +1,7 @@
 import type { CollectionConfig } from 'payload'
+import path from 'node:path'
+
+const mediaStaticDir = process.env.PAYLOAD_MEDIA_DIR || path.resolve(process.cwd(), 'media')
 
 export const Media: CollectionConfig = {
   slug: 'media',
@@ -12,5 +15,8 @@ export const Media: CollectionConfig = {
       required: true,
     },
   ],
-  upload: true,
+  upload: {
+    mimeTypes: ['image/*'],
+    staticDir: mediaStaticDir,
+  },
 }

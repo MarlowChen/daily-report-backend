@@ -68,6 +68,10 @@ export interface Config {
   blocks: {};
   collections: {
     users: User;
+    events: Event;
+    registrations: Registration;
+    announcements: Announcement;
+    dailyReports: DailyReport;
     media: Media;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
@@ -77,6 +81,10 @@ export interface Config {
   collectionsJoins: {};
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
+    events: EventsSelect<false> | EventsSelect<true>;
+    registrations: RegistrationsSelect<false> | RegistrationsSelect<true>;
+    announcements: AnnouncementsSelect<false> | AnnouncementsSelect<true>;
+    dailyReports: DailyReportsSelect<false> | DailyReportsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -87,8 +95,12 @@ export interface Config {
     defaultIDType: string;
   };
   fallbackLocale: null;
-  globals: {};
-  globalsSelect: {};
+  globals: {
+    teamPolicies: TeamPolicy;
+  };
+  globalsSelect: {
+    teamPolicies: TeamPoliciesSelect<false> | TeamPoliciesSelect<true>;
+  };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
@@ -123,6 +135,22 @@ export interface UserAuthOperations {
  */
 export interface User {
   id: string;
+  /**
+   * 隊員常用稱呼。
+   */
+  displayName: string;
+  /**
+   * 報名活動使用的姓名。
+   */
+  realName?: string | null;
+  role: 'admin' | 'cadre' | 'user';
+  phone?: string | null;
+  emergencyContact?: {
+    name?: string | null;
+    phone?: string | null;
+    relationship?: string | null;
+  };
+  notes?: string | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -144,6 +172,56 @@ export interface User {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "events".
+ */
+export interface Event {
+  id: string;
+  title: string;
+  tripType: 'hundredPeaks' | 'regular';
+  status: 'planning' | 'open' | 'full' | 'ended' | 'canceled';
+  startDate: string;
+  endDate: string;
+  price: number;
+  capacity?: number | null;
+  leaders?: (string | User)[] | null;
+  /**
+   * 查詢個人登山履歷時會優先使用這裡的名稱。
+   */
+  mountains?:
+    | {
+        name: string;
+        elevationMeters?: number | null;
+        isHundredPeak?: boolean | null;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * 給活動列表與摘要使用，建議 1-3 句。
+   */
+  summary?: string | null;
+  itinerary?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  meetingPoint?: string | null;
+  registrationNote?: string | null;
+  coverImage?: (string | null) | Media;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media".
  */
 export interface Media {
@@ -160,6 +238,163 @@ export interface Media {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "registrations".
+ */
+export interface Registration {
+  id: string;
+  displayTitle?: string | null;
+  mainContact: string | User;
+  event: string | Event;
+  status: 'pendingDocuments' | 'pendingPayment' | 'completed' | 'canceled';
+  attendance: 'notSet' | 'absent' | 'attended' | 'retreated';
+  participants?:
+    | {
+        linkedUser?: (string | null) | User;
+        name: string;
+        idNumber?: string | null;
+        birthDate?: string | null;
+        phone?: string | null;
+        attendance?: ('notSet' | 'absent' | 'attended' | 'retreated') | null;
+        id?: string | null;
+      }[]
+    | null;
+  agreedToTerms: boolean;
+  payment?: {
+    amount?: number | null;
+    paidAt?: string | null;
+    note?: string | null;
+  };
+  internalNotes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "announcements".
+ */
+export interface Announcement {
+  id: string;
+  title: string;
+  type: 'general' | 'eventChange' | 'lostAndFound';
+  status: 'draft' | 'published' | 'archived';
+  publishAt?: string | null;
+  pinned?: boolean | null;
+  /**
+   * 給公告摘要快速列點使用；未填時可退回讀公告內容。
+   */
+  summary?: string | null;
+  content: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  relatedEvent?: (string | null) | Event;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "dailyReports".
+ */
+export interface DailyReport {
+  id: string;
+  /**
+   * 格式：YYYY-MM-DD，以台灣時間為準。
+   */
+  reportDate: string;
+  status: 'draft' | 'generated' | 'sent' | 'failed';
+  sentAt?: string | null;
+  sentTarget?: string | null;
+  sentBy?: string | null;
+  sentItemCount?: number | null;
+  sentItems?:
+    | {
+        kind?: string | null;
+        label?: string | null;
+        mediaId?: string | null;
+        url?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  part1?: {
+    generatedAt?: string | null;
+    newsSourceUrl?: string | null;
+    newsItems?:
+      | {
+          title: string;
+          url: string;
+          source?: string | null;
+          excerpt?: string | null;
+          id?: string | null;
+        }[]
+      | null;
+    cryptobubblesScreenshot?: (string | null) | Media;
+    coin360Screenshot?: (string | null) | Media;
+    notes?: string | null;
+  };
+  part2?: {
+    generatedAt?: string | null;
+    cteeSourceUrl?: string | null;
+    economicDailySourceUrl?: string | null;
+    cteeNewspaperScreenshot?: (string | null) | Media;
+    cteeNewspaperPage2Screenshot?: (string | null) | Media;
+    cteeNewspaperPage3Screenshot?: (string | null) | Media;
+    economicDailyScreenshot?: (string | null) | Media;
+    economicDailyPage2Screenshot?: (string | null) | Media;
+    economicDailyPage3Screenshot?: (string | null) | Media;
+    notes?: string | null;
+  };
+  part3?: {
+    generatedAt?: string | null;
+    chinaSourceUrl?: string | null;
+    worldSourceUrl?: string | null;
+    usStockHeatmapSourceUrl?: string | null;
+    globalStockCloseSourceUrl?: string | null;
+    chinaDigestImage?: (string | null) | Media;
+    worldDigestImage?: (string | null) | Media;
+    usStockHeatmapImage?: (string | null) | Media;
+    globalStockCloseImage?: (string | null) | Media;
+    chinaItems?:
+      | {
+          title: string;
+          summary?: string | null;
+          url: string;
+          id?: string | null;
+        }[]
+      | null;
+    worldItems?:
+      | {
+          title: string;
+          summary?: string | null;
+          url: string;
+          id?: string | null;
+        }[]
+      | null;
+    notes?: string | null;
+  };
+  errorLogs?:
+    | {
+        scope?: string | null;
+        message?: string | null;
+        occurredAt?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -188,6 +423,22 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'users';
         value: string | User;
+      } | null)
+    | ({
+        relationTo: 'events';
+        value: string | Event;
+      } | null)
+    | ({
+        relationTo: 'registrations';
+        value: string | Registration;
+      } | null)
+    | ({
+        relationTo: 'announcements';
+        value: string | Announcement;
+      } | null)
+    | ({
+        relationTo: 'dailyReports';
+        value: string | DailyReport;
       } | null)
     | ({
         relationTo: 'media';
@@ -240,6 +491,18 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  displayName?: T;
+  realName?: T;
+  role?: T;
+  phone?: T;
+  emergencyContact?:
+    | T
+    | {
+        name?: T;
+        phone?: T;
+        relationship?: T;
+      };
+  notes?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
@@ -256,6 +519,177 @@ export interface UsersSelect<T extends boolean = true> {
         createdAt?: T;
         expiresAt?: T;
       };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "events_select".
+ */
+export interface EventsSelect<T extends boolean = true> {
+  title?: T;
+  tripType?: T;
+  status?: T;
+  startDate?: T;
+  endDate?: T;
+  price?: T;
+  capacity?: T;
+  leaders?: T;
+  mountains?:
+    | T
+    | {
+        name?: T;
+        elevationMeters?: T;
+        isHundredPeak?: T;
+        id?: T;
+      };
+  summary?: T;
+  itinerary?: T;
+  meetingPoint?: T;
+  registrationNote?: T;
+  coverImage?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "registrations_select".
+ */
+export interface RegistrationsSelect<T extends boolean = true> {
+  displayTitle?: T;
+  mainContact?: T;
+  event?: T;
+  status?: T;
+  attendance?: T;
+  participants?:
+    | T
+    | {
+        linkedUser?: T;
+        name?: T;
+        idNumber?: T;
+        birthDate?: T;
+        phone?: T;
+        attendance?: T;
+        id?: T;
+      };
+  agreedToTerms?: T;
+  payment?:
+    | T
+    | {
+        amount?: T;
+        paidAt?: T;
+        note?: T;
+      };
+  internalNotes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "announcements_select".
+ */
+export interface AnnouncementsSelect<T extends boolean = true> {
+  title?: T;
+  type?: T;
+  status?: T;
+  publishAt?: T;
+  pinned?: T;
+  summary?: T;
+  content?: T;
+  relatedEvent?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "dailyReports_select".
+ */
+export interface DailyReportsSelect<T extends boolean = true> {
+  reportDate?: T;
+  status?: T;
+  sentAt?: T;
+  sentTarget?: T;
+  sentBy?: T;
+  sentItemCount?: T;
+  sentItems?:
+    | T
+    | {
+        kind?: T;
+        label?: T;
+        mediaId?: T;
+        url?: T;
+        id?: T;
+      };
+  part1?:
+    | T
+    | {
+        generatedAt?: T;
+        newsSourceUrl?: T;
+        newsItems?:
+          | T
+          | {
+              title?: T;
+              url?: T;
+              source?: T;
+              excerpt?: T;
+              id?: T;
+            };
+        cryptobubblesScreenshot?: T;
+        coin360Screenshot?: T;
+        notes?: T;
+      };
+  part2?:
+    | T
+    | {
+        generatedAt?: T;
+        cteeSourceUrl?: T;
+        economicDailySourceUrl?: T;
+        cteeNewspaperScreenshot?: T;
+        cteeNewspaperPage2Screenshot?: T;
+        cteeNewspaperPage3Screenshot?: T;
+        economicDailyScreenshot?: T;
+        economicDailyPage2Screenshot?: T;
+        economicDailyPage3Screenshot?: T;
+        notes?: T;
+      };
+  part3?:
+    | T
+    | {
+        generatedAt?: T;
+        chinaSourceUrl?: T;
+        worldSourceUrl?: T;
+        usStockHeatmapSourceUrl?: T;
+        globalStockCloseSourceUrl?: T;
+        chinaDigestImage?: T;
+        worldDigestImage?: T;
+        usStockHeatmapImage?: T;
+        globalStockCloseImage?: T;
+        chinaItems?:
+          | T
+          | {
+              title?: T;
+              summary?: T;
+              url?: T;
+              id?: T;
+            };
+        worldItems?:
+          | T
+          | {
+              title?: T;
+              summary?: T;
+              url?: T;
+              id?: T;
+            };
+        notes?: T;
+      };
+  errorLogs?:
+    | T
+    | {
+        scope?: T;
+        message?: T;
+        occurredAt?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -314,6 +748,59 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "teamPolicies".
+ */
+export interface TeamPolicy {
+  id: string;
+  policyContent: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  refundPolicy?:
+    | {
+        tripType: 'hundredPeaks' | 'regular';
+        description: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * 建議整理成 AI 可以直接引用的簡短版本。
+   */
+  aiSummary?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "teamPolicies_select".
+ */
+export interface TeamPoliciesSelect<T extends boolean = true> {
+  policyContent?: T;
+  refundPolicy?:
+    | T
+    | {
+        tripType?: T;
+        description?: T;
+        id?: T;
+      };
+  aiSummary?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

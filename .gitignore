@@ -41,6 +41,8 @@ next-env.d.ts
 .env
 
 /media
+/.pnpm-store/
+/line-relay/dist/
 
 # Playwright
 node_modules/

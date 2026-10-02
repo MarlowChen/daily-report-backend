@@ -1,12 +1,12 @@
 # To use this Dockerfile, you have to set `output: 'standalone'` in your next.config.mjs file.
 # From https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
 
-FROM node:22.17.0-alpine AS base
+# Playwright screenshots need a real Chromium runtime in production. Alpine
+# images do not include the browser/system libraries Playwright needs.
+FROM mcr.microsoft.com/playwright:v1.58.2-noble AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
@@ -45,22 +45,20 @@ ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Remove this line if you do not have this folder
-COPY --from=builder /app/public ./public
+# The Payload starter may not include a public/ directory. Create it here so
+# Next can serve static files when present without making Docker depend on it.
+RUN mkdir -p public media
 
 # Set the correct permission for prerender cache
 RUN mkdir .next
-RUN chown nextjs:nodejs .next
+RUN chown pwuser:pwuser .next media
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=pwuser:pwuser /app/.next/standalone ./
+COPY --from=builder --chown=pwuser:pwuser /app/.next/static ./.next/static
 
-USER nextjs
+USER pwuser
 
 EXPOSE 3000
 
